@@ -1,0 +1,117 @@
+.navigation {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: var(--max-bg-primary);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--max-border);
+  padding: 12px 0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  pointer-events: auto;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: var(--max-text-tertiary);
+  padding: 10px 20px;
+  border-radius: var(--max-radius-md);
+  transition: var(--max-transition);
+  min-width: 80px;
+  position: relative;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 3px;
+  background: var(--max-primary);
+  border-radius: 0 0 3px 3px;
+  transition: var(--max-transition);
+}
+
+.nav-item:hover {
+  background: var(--max-bg-hover);
+  color: var(--max-primary);
+  transform: translateY(-2px);
+}
+
+.nav-item.active {
+  color: var(--max-primary);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.1) 0%, rgba(74, 144, 226, 0.05) 100%);
+}
+
+.nav-item.active::before {
+  width: 60%;
+}
+
+.nav-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+  transition: var(--max-transition);
+}
+
+.nav-item.active .nav-icon {
+  transform: scale(1.1);
+}
+
+.nav-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+@media (min-width: 769px) {
+  .navigation {
+    position: relative;
+    border-top: none;
+    border-bottom: 1px solid var(--max-border);
+    box-shadow: var(--max-shadow-sm);
+    padding: 16px 0;
+    border-radius: var(--max-radius-lg) var(--max-radius-lg) 0 0;
+    margin: 0 16px;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .nav-item {
+    min-width: 120px;
+    flex-direction: row;
+    gap: 10px;
+  }
+  
+  .nav-item::before {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+  }
+  
+  .nav-item.active::before {
+    width: 100%;
+  }
+  
+  .nav-icon {
+    margin-bottom: 0;
+  }
+  
+  .nav-label {
+    font-size: 14px;
+  }
+}
+
