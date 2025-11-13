@@ -1,33 +1,19 @@
-# Многоэтапная сборка для оптимизации размера образа
-# Этап 1: Сборка приложения
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Копируем файлы зависимостей
-COPY package.json package-lock.json* ./
+# Установка зависимостей
+COPY package*.json ./
+RUN npm ci --only=production
 
-# Устанавливаем зависимости
-RUN npm ci
-
-# Копируем исходный код
+# Копирование кода
 COPY . .
 
-# Собираем приложение для production
-RUN npm run build
+# Создание директории для БД
+RUN mkdir -p /app/data
 
-# Этап 2: Production образ с Nginx
-FROM nginx:alpine
+# Открываем порт
+EXPOSE 3000
 
-# Копируем собранные файлы из builder
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Копируем конфигурацию Nginx (опционально)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Открываем порт 80
-EXPOSE 80
-
-# Запускаем Nginx
-CMD ["nginx", "-g", "daemon off;"]
-
+# Запуск бота
+CMD ["node", "server.js"]

@@ -62,53 +62,13 @@ const CatalogPage = () => {
     setFilters(newFilters)
   }
 
-  console.log('CatalogPage - requests:', requests, 'filtered:', filteredRequests)
-
-  const testClick = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    console.log('Тестовая кнопка нажата!')
-    alert('Кнопка работает!')
-    return false
-  }
-
   return (
-    <div className="catalog-page" style={{position: 'relative', zIndex: 1}}>
+    <div className="catalog-page">
       <div className="catalog-header">
         <h2>Каталог заявок</h2>
-        <div style={{display: 'flex', gap: '10px', alignItems: 'center', position: 'relative', zIndex: 10}}>
-          <button 
-            onClick={testClick}
-            onMouseDown={(e) => {
-              e.preventDefault()
-              console.log('MouseDown на тестовой кнопке')
-            }}
-            style={{
-              padding: '12px 24px', 
-              background: '#ff0000', 
-              color: 'white', 
-              border: '3px solid #000',
-              borderRadius: '8px', 
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              zIndex: 1000,
-              position: 'relative'
-            }}
-          >
-            ТЕСТ КНОПКИ
-          </button>
-          <Link 
-            to="/create-request" 
-            className="create-button" 
-            onClick={(e) => {
-              console.log('Клик по ссылке создания заявки')
-            }}
-            style={{position: 'relative', zIndex: 10}}
-          >
-            ➕ Создать заявку
-          </Link>
-        </div>
+        <Link to="/create-request" className="create-button">
+          ➕ Создать заявку
+        </Link>
       </div>
 
       <div className="catalog-content">

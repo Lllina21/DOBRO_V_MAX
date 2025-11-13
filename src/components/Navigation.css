@@ -74,16 +74,19 @@
 
 @media (min-width: 769px) {
   .navigation {
-    position: relative;
-    border-top: none;
-    border-bottom: 1px solid var(--max-border);
-    box-shadow: var(--max-shadow-sm);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--max-border);
+    border-bottom: none;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
     padding: 16px 0;
-    border-radius: var(--max-radius-lg) var(--max-radius-lg) 0 0;
-    margin: 0 16px;
     max-width: 1440px;
     margin-left: auto;
     margin-right: auto;
+    background: var(--max-bg-primary);
+    backdrop-filter: blur(20px);
   }
   
   .nav-item {

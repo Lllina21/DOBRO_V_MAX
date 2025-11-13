@@ -125,12 +125,19 @@ const CreateRequestPage = () => {
                 value={formData.category}
                 onChange={handleChange}
                 className={errors.category ? 'error' : ''}
+                style={{width: '100%', minWidth: '200px'}}
               >
                 <option value="">Выберите категорию</option>
                 <option value="Инклюзия">Инклюзия</option>
                 <option value="Экология">Экология</option>
                 <option value="Здоровье">Здоровье</option>
                 <option value="Культура">Культура</option>
+                <option value="Образование">Образование</option>
+                <option value="Социальная помощь">Социальная помощь</option>
+                <option value="Спорт">Спорт</option>
+                <option value="Животные">Животные</option>
+                <option value="Экстренная помощь">Экстренная помощь</option>
+                <option value="Другое">Другое</option>
               </select>
               {errors.category && <span className="error-message">{errors.category}</span>}
             </div>
@@ -158,6 +165,7 @@ const CreateRequestPage = () => {
               value={formData.region}
               onChange={handleChange}
               className={errors.region ? 'error' : ''}
+              style={{width: '100%', minWidth: '200px'}}
             >
               <option value="">Выберите регион</option>
               <option value="Москва">Москва</option>
@@ -165,6 +173,26 @@ const CreateRequestPage = () => {
               <option value="Казань">Казань</option>
               <option value="Новосибирск">Новосибирск</option>
               <option value="Екатеринбург">Екатеринбург</option>
+              <option value="Нижний Новгород">Нижний Новгород</option>
+              <option value="Красноярск">Красноярск</option>
+              <option value="Челябинск">Челябинск</option>
+              <option value="Самара">Самара</option>
+              <option value="Уфа">Уфа</option>
+              <option value="Ростов-на-Дону">Ростов-на-Дону</option>
+              <option value="Краснодар">Краснодар</option>
+              <option value="Воронеж">Воронеж</option>
+              <option value="Пермь">Пермь</option>
+              <option value="Волгоград">Волгоград</option>
+              <option value="Омск">Омск</option>
+              <option value="Тюмень">Тюмень</option>
+              <option value="Иркутск">Иркутск</option>
+              <option value="Хабаровск">Хабаровск</option>
+              <option value="Владивосток">Владивосток</option>
+              <option value="Ярославль">Ярославль</option>
+              <option value="Тула">Тула</option>
+              <option value="Калининград">Калининград</option>
+              <option value="Сочи">Сочи</option>
+              <option value="Другой">Другой</option>
             </select>
             {errors.region && <span className="error-message">{errors.region}</span>}
           </div>
@@ -246,58 +274,22 @@ const CreateRequestPage = () => {
           </div>
         </div>
 
-        <div className="form-actions" style={{position: 'relative', zIndex: 10}}>
+        <div className="form-actions">
           <button 
             type="submit" 
             className="submit-button"
-            onClick={(e) => {
-              console.log('Клик по кнопке отправки формы')
-              // handleSubmit вызовется автоматически через onSubmit формы
-            }}
-            onMouseDown={(e) => {
-              console.log('MouseDown на кнопке отправки')
-            }}
           >
             Создать заявку
           </button>
           <button
             type="button"
             onClick={(e) => {
-              console.log('Клик по кнопке отмены')
               e.preventDefault()
-              e.stopPropagation()
               navigate(-1)
             }}
             className="cancel-button"
           >
             Отмена
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              console.log('Тестовая кнопка нажата!')
-              alert('Кнопка работает!')
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault()
-              console.log('MouseDown на тестовой кнопке')
-            }}
-            style={{
-              padding: '12px 24px', 
-              background: '#ff0000', 
-              color: 'white', 
-              border: '3px solid #000',
-              borderRadius: '8px', 
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              zIndex: 1000,
-              position: 'relative'
-            }}
-          >
-            ТЕСТ КНОПКИ
           </button>
         </div>
       </form>
