@@ -5,42 +5,63 @@ const db = require('../database');
 
 /**
  * Главный обработчик обновлений от MAX
+ * Согласно документации MAX, события приходят в формате:
+ * { type: 'message' | 'message_callback' | ..., ...data }
  */
-async function handleUpdate(update) {
+async function handleUpdate(event) {
   try {
-    // Обработка сообщения
-    if (update.message) {
-      await handleMessage(update.message);
+    const eventType = event.type || event.event_type;
+    
+    // Обработка текстового сообщения
+    if (eventType === 'message' || event.message) {
+      await handleMessage(event.message || event);
     }
     
     // Обработка callback query (нажатие на inline-кнопку)
-    if (update.callback_query) {
-      await handleCallbackQuery(update.callback_query);
+    // В MAX это событие типа message_callback
+    if (eventType === 'message_callback' || event.callback_query || event.message_callback) {
+      const callbackData = event.message_callback || event.callback_query || event;
+      await handleCallbackQuery(callbackData);
     }
     
-    // Обработка других типов обновлений
-    if (update.edited_message) {
+    // Обработка других типов событий
+    if (eventType === 'edited_message' || event.edited_message) {
       // Игнорируем редактированные сообщения
+      console.log('Игнорируем редактированное сообщение');
+    }
+    
+    // Если тип события не определен, пробуем обработать как сообщение
+    if (!eventType && !event.message && !event.callback_query && !event.message_callback) {
+      console.log('Неизвестный формат события:', JSON.stringify(event, null, 2));
     }
   } catch (error) {
     console.error('Ошибка обработки обновления:', error);
+    console.error('Событие:', JSON.stringify(event, null, 2));
   }
 }
 
 /**
  * Обработка текстовых сообщений
+ * Поддержка разных форматов событий MAX
  */
 async function handleMessage(message) {
-  const chatId = message.chat.id;
-  const text = message.text || '';
-  const userId = message.from.id;
+  // Поддержка разных форматов сообщений MAX
+  const chatId = message.chat?.id || message.chat_id;
+  const text = message.text || message.message?.text || '';
+  const userId = message.from?.id || message.user_id || message.user?.id;
+  const from = message.from || message.user || {};
+  
+  if (!chatId || !userId) {
+    console.error('Не удалось определить chatId или userId:', JSON.stringify(message, null, 2));
+    return;
+  }
   
   // Сохраняем пользователя в БД
   await db.saveUser({
     id: userId,
-    firstName: message.from.first_name || '',
-    lastName: message.from.last_name || '',
-    username: message.from.username || ''
+    firstName: from.first_name || from.firstName || '',
+    lastName: from.last_name || from.lastName || '',
+    username: from.username || ''
   });
   
   // Обработка команд
@@ -49,7 +70,8 @@ async function handleMessage(message) {
     
     switch (command) {
       case '/start':
-        await handleStart(chatId, message.from);
+        const from = message.from || message.user || { id: userId };
+        await handleStart(chatId, from);
         break;
       case '/catalog':
       case '/каталог':
@@ -86,22 +108,34 @@ async function handleMessage(message) {
       await handleRequestCreationStep(chatId, userId, text, userState);
     } else {
       // Отправляем главное меню
-      await handleStart(chatId, message.from);
+      const from = message.from || message.user || { id: userId };
+      await handleStart(chatId, from);
     }
   }
 }
 
 /**
  * Обработка callback query (нажатие на inline-кнопку)
+ * В MAX это событие message_callback
  */
 async function handleCallbackQuery(callbackQuery) {
-  const chatId = callbackQuery.message.chat.id;
-  const messageId = callbackQuery.message.message_id;
-  const userId = callbackQuery.from.id;
-  const data = callbackQuery.data;
+  // Поддержка разных форматов событий MAX
+  const message = callbackQuery.message || callbackQuery;
+  const chatId = message.chat?.id || message.chat_id;
+  const messageId = message.message_id || message.id;
+  const userId = callbackQuery.from?.id || callbackQuery.user_id || callbackQuery.user?.id;
+  const data = callbackQuery.payload || callbackQuery.data || callbackQuery.callback_data;
+  const callbackId = callbackQuery.id || callbackQuery.callback_query_id;
+  
+  if (!data) {
+    console.error('Нет данных в callback query:', JSON.stringify(callbackQuery, null, 2));
+    return;
+  }
   
   // Отвечаем на callback
-  await botAPI.answerCallbackQuery(callbackQuery.id);
+  if (callbackId) {
+    await botAPI.answerCallbackQuery(callbackId);
+  }
   
   // Парсим данные callback
   const [action, ...params] = data.split(':');
@@ -140,7 +174,7 @@ async function handleCallbackQuery(callbackQuery) {
           
           await db.clearUserState(userId);
           await botAPI.sendMessage(chatId, messages.requestCreated(request));
-          await handleStart(chatId, { id: userId });
+          await handleStart(chatId, { id: userId, first_name: 'Пользователь' });
         }
       } else {
         await handleCancel(chatId, userId);
@@ -186,13 +220,17 @@ async function handleCallbackQuery(callbackQuery) {
  * Обработка команды /start
  */
 async function handleStart(chatId, user) {
-  const welcomeText = messages.welcome(user.first_name);
+  const firstName = user?.first_name || user?.firstName || 'друг';
+  const userId = user?.id || user?.user_id;
+  const welcomeText = messages.welcome(firstName);
   const keyboard = keyboards.mainMenu();
   
   await botAPI.sendMessageWithReplyKeyboard(chatId, welcomeText, keyboard);
   
   // Сбрасываем состояние пользователя
-  await db.clearUserState(user.id);
+  if (userId) {
+    await db.clearUserState(userId);
+  }
 }
 
 /**
@@ -335,7 +373,7 @@ async function handleHelp(chatId) {
  */
 async function handleUnknownCommand(chatId) {
   await botAPI.sendMessage(chatId, messages.unknownCommand());
-  await handleStart(chatId, {});
+  await handleStart(chatId, { first_name: 'Пользователь' });
 }
 
 /**
@@ -344,7 +382,7 @@ async function handleUnknownCommand(chatId) {
 async function handleCancel(chatId, userId) {
   await db.clearUserState(userId);
   await botAPI.sendMessage(chatId, 'Действие отменено.');
-  await handleStart(chatId, { id: userId });
+  await handleStart(chatId, { id: userId, first_name: 'Пользователь' });
 }
 
 /**

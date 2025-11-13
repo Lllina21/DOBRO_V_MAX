@@ -1,5 +1,6 @@
 const botAPI = require('../bot/api');
 const config = require('../config');
+const axios = require('axios');
 
 async function testBot() {
   console.log('🔍 Тестирование подключения к MAX Bot API...');
@@ -9,40 +10,39 @@ async function testBot() {
   
   try {
     // Проверяем информацию о боте
-    console.log('1. Проверка информации о боте...');
-    console.log('Пробуем endpoint: /bot/v1/getMe');
+    console.log('1. Проверка информации о боте (GET /me)...');
     try {
       const botInfo = await botAPI.getMe();
       console.log('✅ Бот подключен успешно!');
       console.log('Информация о боте:', JSON.stringify(botInfo, null, 2));
       console.log('');
     } catch (getMeError) {
-      // Если getMe не работает, пробуем прямой запрос
-      console.log('⚠️  Стандартный метод не работает, пробуем прямой запрос...');
-      const axios = require('axios');
-      const testEndpoints = [
-        '/bot/v1/getMe',
-        '/v1/bot/getMe',
-        '/bot/getMe',
-        '/api/bot/v1/getMe',
-        '/getMe'
+      // Если стандартный метод не работает, пробуем разные варианты Authorization
+      console.log('⚠️  Стандартный метод не работает, пробуем варианты авторизации...');
+      
+      const authVariants = [
+        { name: 'Authorization: <token>', header: config.BOT_TOKEN },
+        { name: 'Authorization: Bearer <token>', header: `Bearer ${config.BOT_TOKEN}` }
       ];
       
       let found = false;
-      for (const endpoint of testEndpoints) {
+      for (const auth of authVariants) {
         try {
-          const response = await axios.get(`${config.MAX_API_URL}${endpoint}`, {
+          const response = await axios.get(`${config.MAX_API_URL}/me`, {
             headers: {
-              'Authorization': `Bearer ${config.BOT_TOKEN}`,
+              'Authorization': auth.header,
               'Content-Type': 'application/json'
             }
           });
-          console.log(`✅ Рабочий endpoint: ${endpoint}`);
+          console.log(`✅ Рабочий вариант авторизации: ${auth.name}`);
           console.log('Ответ:', JSON.stringify(response.data, null, 2));
           found = true;
           break;
         } catch (e) {
-          console.log(`❌ ${endpoint}: ${e.response?.status || e.message}`);
+          console.log(`❌ ${auth.name}: ${e.response?.status || e.message}`);
+          if (e.response?.data) {
+            console.log(`   Данные: ${JSON.stringify(e.response.data)}`);
+          }
         }
       }
       
@@ -53,8 +53,10 @@ async function testBot() {
     
     // Проверяем webhook
     console.log('2. Проверка webhook...');
-    // Здесь можно добавить проверку webhook, если API поддерживает getWebhookInfo
+    console.log('Webhook URL:', config.WEBHOOK_URL);
+    console.log('Примечание: Webhook настраивается через панель управления MAX или через API');
     
+    console.log('');
     console.log('✅ Все проверки пройдены!');
   } catch (error) {
     console.error('❌ Ошибка подключения:');
@@ -70,6 +72,8 @@ async function testBot() {
     console.log('   - Неверный URL API');
     console.log('   - API MAX Bot еще не доступен');
     console.log('   - Проблемы с сетью');
+    console.log('');
+    console.log('📖 Документация: https://dev.max.ru/docs/api');
   }
 }
 

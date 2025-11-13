@@ -1,0 +1,13 @@
+# Node.js Dependencies для бота "Добро в MAX"
+# Для установки используйте: npm install
+
+express==4.18.2
+body-parser==1.20.2
+axios==1.6.2
+sqlite3==5.1.6
+sqlite==5.1.1
+dotenv==16.3.1
+
+# Dev Dependencies (для разработки)
+nodemon==3.0.2
+
