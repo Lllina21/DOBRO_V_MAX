@@ -30,55 +30,76 @@ class MaxBotAPI {
       return null;
     }
 
-    const messageBody = {
-      chat_id: chatId,
-      text: text
-    };
-
-    if (options.format) {
-      messageBody.format = options.format;
-    }
-
-    if (options.attachments) {
-      messageBody.attachments = options.attachments;
-    }
-
-    const endpoints = ['/messages', '/bot/messages', '/v1/messages'];
+    const recipientChatId = options.recipientChatId || null;
+    const endpoints = ['/messages', '/bot/messages'];
     let lastError = null;
 
     for (const endpoint of endpoints) {
-      try {
-        const response = await this.client.post(endpoint, messageBody);
-        console.log(`Сообщение отправлено через ${endpoint}`);
-        return response.data;
-      } catch (error) {
-        lastError = error;
-        
-        if (error.response?.status === 404) {
-          continue;
-        }
-        
-        if (error.response?.status !== 404) {
-          console.error(`Ошибка отправки через ${endpoint}:`, {
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data,
-            message: error.message
-          });
+      const formats = recipientChatId ? [
+        { recipient: { user_id: chatId, chat_id: recipientChatId } },
+        { recipient: { user_id: chatId } },
+        { recipient: { chat_id: recipientChatId } },
+        { recipient: { chat_id: chatId } },
+        { user_id: chatId },
+        { chat_id: recipientChatId },
+        { chat_id: chatId }
+      ] : [
+        { recipient: { user_id: chatId } },
+        { recipient: { chat_id: chatId } },
+        { user_id: chatId },
+        { chat_id: chatId }
+      ];
+
+      for (const format of formats) {
+        try {
+          const messageBody = {
+            ...format,
+            text: text
+          };
+
+          if (options.format) {
+            messageBody.format = options.format;
+          }
+
+          if (options.attachments) {
+            messageBody.attachments = options.attachments;
+          }
+
+          const response = await this.client.post(endpoint, messageBody);
+          console.log(`✅ Сообщение отправлено через ${endpoint}`);
+          return response.data;
+        } catch (error) {
+          lastError = error;
           
-          if (error.response?.status === 401) {
-            console.error('Ошибка авторизации. Проверьте BOT_TOKEN в .env');
-          } else if (error.response?.status === 400) {
-            console.error('Ошибка формата запроса:', JSON.stringify(messageBody, null, 2));
+          if (error.response?.status === 400) {
+            const errorMsg = error.response?.data?.message || '';
+            if (errorMsg.includes('Unknown recipient') || errorMsg.includes('proto.payload')) {
+              continue;
+            }
           }
           
-          throw error;
+          if (error.response?.status === 404) {
+            break;
+          }
+          
+          if (error.response?.status !== 400 && error.response?.status !== 404) {
+            console.error(`Ошибка отправки через ${endpoint}:`, {
+              status: error.response?.status,
+              data: error.response?.data
+            });
+            
+            if (error.response?.status === 401) {
+              console.error('Ошибка авторизации. Проверьте BOT_TOKEN в .env');
+            }
+            
+            throw error;
+          }
         }
       }
     }
 
     if (lastError) {
-      console.error('Все endpoint не найдены. Последняя ошибка:', {
+      console.error('Все форматы и endpoint не подошли. Последняя ошибка:', {
         status: lastError.response?.status,
         data: lastError.response?.data,
         message: lastError.message

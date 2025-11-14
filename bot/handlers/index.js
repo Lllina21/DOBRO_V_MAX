@@ -10,29 +10,41 @@ async function handleUpdate(event) {
     switch (update_type) {
       case 'message_created':
         if (message) {
-          const chatId = message.recipient?.chat_id || chat_id;
-          const userId = message.sender?.user_id || message.sender?.id || user_id;
+          const recipientUserId = message.recipient?.user_id;
+          const sender = message.sender;
+          const senderUserId = sender?.user_id;
+          const chatId = message.recipient?.chat_id;
           const text = message.body?.text || '';
           
-          if (!chatId || !userId) {
-            console.error('Не удалось определить chatId или userId из события:', {
-              chatId,
-              userId,
-              recipient: message.recipient,
-              sender: message.sender
-            });
+          console.log('=== Обработка message_created ===');
+          console.log('recipient.user_id:', recipientUserId);
+          console.log('sender.user_id:', senderUserId);
+          console.log('chat_id:', chatId);
+          console.log('text:', text);
+          
+          if (!senderUserId) {
+            console.error('ОШИБКА: sender.user_id не найден');
+            console.error('sender:', JSON.stringify(sender, null, 2));
             return;
           }
 
           const normalizedMessage = {
-            chat: { id: chatId },
-            from: message.sender || user,
-            text: text
+            chat: { id: senderUserId },
+            from: sender,
+            text: text,
+            recipientUserId: recipientUserId,
+            originalChatId: chatId,
+            recipientChatId: chatId
           };
           
+          console.log('Нормализованное сообщение:', JSON.stringify(normalizedMessage, null, 2));
+          
           await handleMessage(normalizedMessage).catch(err => {
-            console.error('Ошибка в handleMessage:', err);
+            console.error('Ошибка в handleMessage:', err.message);
+            console.error(err.stack);
           });
+        } else {
+          console.error('message отсутствует в событии');
         }
         break;
 
@@ -71,16 +83,19 @@ async function handleMessage(message) {
     const text = message.text || '';
     const userId = message.from?.user_id || message.from?.id;
     const from = message.from || {};
+    const recipientChatId = message.recipientChatId;
 
     if (!chatId) {
-      console.error('Не удалось определить chatId:', JSON.stringify(message, null, 2));
+      console.error('ОШИБКА: chatId не найден в handleMessage');
       return;
     }
     
     if (!userId) {
-      console.error('Не удалось определить userId:', JSON.stringify(message, null, 2));
+      console.error('ОШИБКА: userId не найден в handleMessage');
       return;
     }
+    
+    console.log('Начинаю сохранение пользователя в БД...');
 
     await db.saveUser({
       id: userId,
@@ -88,13 +103,18 @@ async function handleMessage(message) {
       lastName: from.last_name || from.lastName || '',
       username: from.username || ''
     });
+    
+    console.log('Пользователь сохранен в БД');
 
     if (text.startsWith('/')) {
       const command = text.split(' ')[0].toLowerCase();
+      console.log('Обработка команды:', command);
 
       switch (command) {
         case '/start':
-          await handleStart(chatId, from);
+          console.log('Вызов handleStart...');
+          await handleStart(chatId, from, recipientChatId);
+          console.log('handleStart завершен');
           break;
         case '/catalog':
         case '/каталог':
@@ -236,20 +256,32 @@ async function handleCallbackQuery(callbackQuery) {
   }
 }
 
-async function handleStart(chatId, user) {
+async function handleStart(chatId, user, recipientChatId = null) {
   try {
     const firstName = user?.first_name || user?.firstName || 'друг';
     const userId = user?.id || user?.user_id;
     const welcomeText = messages.welcome(firstName);
     const keyboard = keyboards.mainMenu();
 
-    await botAPI.sendMessageWithReplyKeyboard(chatId, welcomeText, keyboard);
+    const result = await botAPI.sendMessageWithReplyKeyboard(chatId, welcomeText, keyboard, {
+      recipientChatId: recipientChatId
+    });
+    
+    if (result) {
+      console.log('✅ Сообщение успешно отправлено');
+    } else {
+      console.error('❌ Не удалось отправить сообщение');
+    }
 
     if (userId) {
       await db.clearUserState(userId);
     }
+    
+    console.log('handleStart завершен успешно');
   } catch (error) {
-    console.error('Ошибка в handleStart:', error);
+    console.error('ОШИБКА в handleStart:', error.message);
+    console.error('Stack:', error.stack);
+    throw error;
   }
 }
 
