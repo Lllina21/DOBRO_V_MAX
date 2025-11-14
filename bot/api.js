@@ -34,7 +34,7 @@ class MaxBotAPI {
 
   /**
    * Отправка текстового сообщения
-   * POST /messages
+   * POST /messages или POST /bot/messages
    * 
    * @param {string|number} chatId - ID чата
    * @param {string} text - Текст сообщения
@@ -42,10 +42,10 @@ class MaxBotAPI {
    */
   async sendMessage(chatId, text, options = {}) {
     try {
+      // Формируем тело запроса
       const messageBody = {
         chat_id: chatId,
-        text: text,
-        ...options
+        text: text
       };
 
       // Если указан формат, добавляем его
@@ -58,10 +58,50 @@ class MaxBotAPI {
         messageBody.attachments = options.attachments;
       }
 
-      const response = await this.client.post('/messages', messageBody);
-      return response.data;
+      // Пробуем разные варианты endpoint'ов
+      const endpoints = ['/messages', '/bot/messages', '/v1/messages'];
+      let lastError = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`📤 Попытка отправить сообщение через ${endpoint}...`);
+          const response = await this.client.post(endpoint, messageBody);
+          console.log(`✅ Сообщение отправлено успешно через ${endpoint}`);
+          return response.data;
+        } catch (error) {
+          lastError = error;
+          // Если это не 404, значит endpoint правильный, но есть другая ошибка
+          if (error.response?.status !== 404) {
+            throw error;
+          }
+          // Если 404, пробуем следующий endpoint
+          console.log(`⚠️  Endpoint ${endpoint} не найден (404), пробуем следующий...`);
+        }
+      }
+
+      // Если все endpoint'ы вернули 404, выбрасываем последнюю ошибку
+      throw lastError;
     } catch (error) {
-      console.error('Ошибка отправки сообщения:', error.response?.data || error.message);
+      const errorDetails = {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        chatId: chatId,
+        textLength: text?.length
+      };
+      console.error('❌ Ошибка отправки сообщения:', JSON.stringify(errorDetails, null, 2));
+      
+      // Дополнительная информация для отладки
+      if (error.response?.status === 401) {
+        console.error('💡 Возможная причина: Неверный токен бота. Проверьте BOT_TOKEN в .env');
+      } else if (error.response?.status === 404) {
+        console.error('💡 Возможная причина: Неверный endpoint. Проверьте MAX_API_URL в .env');
+      } else if (error.response?.status === 400) {
+        console.error('💡 Возможная причина: Неверный формат запроса. Проверьте структуру messageBody');
+        console.error('   Отправляемые данные:', JSON.stringify(messageBody, null, 2));
+      }
+      
       throw error;
     }
   }

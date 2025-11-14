@@ -3,74 +3,69 @@ const keyboards = require('../keyboards');
 const messages = require('../messages');
 const db = require('../database');
 
-/**
- * Главный обработчик обновлений от MAX
- * Согласно документации MAX, события приходят в формате:
- * { type: 'message' | 'message_callback' | ..., ...data }
- */
 async function handleUpdate(event) {
-  try {
-    const eventType = event.type || event.event_type;
-    
-    // Обработка текстового сообщения
-    if (eventType === 'message' || event.message) {
-      await handleMessage(event.message || event);
-    }
-    
-    // Обработка callback query (нажатие на inline-кнопку)
-    // В MAX это событие типа message_callback
-    if (eventType === 'message_callback' || event.callback_query || event.message_callback) {
-      const callbackData = event.message_callback || event.callback_query || event;
-      await handleCallbackQuery(callbackData);
-    }
-    
-    // Обработка других типов событий
-    if (eventType === 'edited_message' || event.edited_message) {
-      // Игнорируем редактированные сообщения
-      console.log('Игнорируем редактированное сообщение');
-    }
-    
-    // Если тип события не определен, пробуем обработать как сообщение
-    if (!eventType && !event.message && !event.callback_query && !event.message_callback) {
-      console.log('Неизвестный формат события:', JSON.stringify(event, null, 2));
-    }
-  } catch (error) {
-    console.error('Ошибка обработки обновления:', error);
-    console.error('Событие:', JSON.stringify(event, null, 2));
+  console.log('📥 handleUpdate вызван с событием:', JSON.stringify(event, null, 2));
+  const { update_type, message, user, chat_id, user_id, callback_query, message_callback } = event;
+
+  switch (update_type) {
+    case 'message_created':
+      if (message) {
+        const normalizedMessage = {
+          chat: { id: message.recipient?.chat_id },
+          from: message.sender,
+          text: message.body?.text,
+        };
+        await handleMessage(normalizedMessage);
+      }
+      break;
+
+    case 'message_callback':
+    case 'callback_query':
+      // Обработка нажатий на inline-кнопки
+      if (callback_query || message_callback) {
+        await handleCallbackQuery(callback_query || message_callback || event);
+      }
+      break;
+
+    case 'bot_started':
+      if (chat_id && user) {
+        await handleStart(chat_id, user);
+      }
+      break;
+
+    case 'bot_stopped':
+      console.log('Пользователь остановил бота:', { chat_id, user });
+      break;
+
+    default:
+      console.log('Неизвестный тип события:', JSON.stringify(event, null, 2));
   }
 }
 
-/**
- * Обработка текстовых сообщений
- * Поддержка разных форматов событий MAX
- */
 async function handleMessage(message) {
-  // Поддержка разных форматов сообщений MAX
-  const chatId = message.chat?.id || message.chat_id;
-  const text = message.text || message.message?.text || '';
-  const userId = message.from?.id || message.user_id || message.user?.id;
-  const from = message.from || message.user || {};
-  
+  console.log('💬 handleMessage вызван с сообщением:', JSON.stringify(message, null, 2));
+  const chatId = message.chat?.id;
+  const text = message.text || '';
+  const userId = message.from?.user_id || message.from?.id;
+  const from = message.from || {};
+
   if (!chatId || !userId) {
     console.error('Не удалось определить chatId или userId:', JSON.stringify(message, null, 2));
     return;
   }
-  
-  // Сохраняем пользователя в БД
+
   await db.saveUser({
     id: userId,
     firstName: from.first_name || from.firstName || '',
     lastName: from.last_name || from.lastName || '',
     username: from.username || ''
   });
-  
-  // Обработка команд
+
   if (text.startsWith('/')) {
     const command = text.split(' ')[0].toLowerCase();
-    
+
     switch (command) {
       case '/start':
-        const from = message.from || message.user || { id: userId };
         await handleStart(chatId, from);
         break;
       case '/catalog':
@@ -101,45 +96,45 @@ async function handleMessage(message) {
   } else if (text === '❓ Помощь' || text === 'Помощь') {
     await handleHelp(chatId);
   } else {
-    // Обработка обычных сообщений (для создания заявки)
     const userState = await db.getUserState(userId);
-    
+
     if (userState && userState.action === 'creating_request') {
       await handleRequestCreationStep(chatId, userId, text, userState);
     } else {
-      // Отправляем главное меню
-      const from = message.from || message.user || { id: userId };
-      await handleStart(chatId, from);
+      await handleStart(chatId, { first_name: 'Пользователь' });
     }
   }
 }
 
-/**
- * Обработка callback query (нажатие на inline-кнопку)
- * В MAX это событие message_callback
- */
 async function handleCallbackQuery(callbackQuery) {
-  // Поддержка разных форматов событий MAX
-  const message = callbackQuery.message || callbackQuery;
-  const chatId = message.chat?.id || message.chat_id;
-  const messageId = message.message_id || message.id;
-  const userId = callbackQuery.from?.id || callbackQuery.user_id || callbackQuery.user?.id;
-  const data = callbackQuery.payload || callbackQuery.data || callbackQuery.callback_data;
-  const callbackId = callbackQuery.id || callbackQuery.callback_query_id;
+  console.log('🔘 handleCallbackQuery вызван:', JSON.stringify(callbackQuery, null, 2));
   
-  if (!data) {
-    console.error('Нет данных в callback query:', JSON.stringify(callbackQuery, null, 2));
+  // Извлекаем данные из разных возможных форматов MAX API
+  const message = callbackQuery.message || callbackQuery;
+  const chatId = message.chat?.id || message.chat_id || callbackQuery.chat_id || callbackQuery.chat?.id;
+  const messageId = message.message_id || message.id || callbackQuery.message_id;
+  const userId = callbackQuery.from?.id || callbackQuery.user_id || callbackQuery.user?.id || callbackQuery.from?.user_id;
+  const data = callbackQuery.payload || callbackQuery.data || callbackQuery.callback_data || callbackQuery.button?.payload;
+  const callbackId = callbackQuery.id || callbackQuery.callback_query_id;
+
+  if (!chatId) {
+    console.error('❌ Не удалось определить chatId из callback query:', JSON.stringify(callbackQuery, null, 2));
     return;
   }
-  
-  // Отвечаем на callback
+
+  if (!data) {
+    console.error('❌ Нет данных в callback query:', JSON.stringify(callbackQuery, null, 2));
+    return;
+  }
+
+  console.log(`✅ Обработка callback: chatId=${chatId}, userId=${userId}, data=${data}`);
+
   if (callbackId) {
     await botAPI.answerCallbackQuery(callbackId);
   }
-  
-  // Парсим данные callback
+
   const [action, ...params] = data.split(':');
-  
+
   switch (action) {
     case 'view_request':
       const requestId = parseInt(params[0]);
@@ -161,7 +156,6 @@ async function handleCallbackQuery(callbackQuery) {
     case 'cancel':
       await handleCancel(chatId, userId);
       break;
-      
     case 'confirm':
       if (params[0] === 'yes') {
         const userState = await db.getUserState(userId);
@@ -171,7 +165,7 @@ async function handleCallbackQuery(callbackQuery) {
             userId: userId,
             createdAt: new Date().toISOString()
           });
-          
+
           await db.clearUserState(userId);
           await botAPI.sendMessage(chatId, messages.requestCreated(request));
           await handleStart(chatId, { id: userId, first_name: 'Пользователь' });
@@ -180,7 +174,6 @@ async function handleCallbackQuery(callbackQuery) {
         await handleCancel(chatId, userId);
       }
       break;
-      
     case 'category':
       const category = params[0];
       const userState = await db.getUserState(userId);
@@ -190,7 +183,6 @@ async function handleCallbackQuery(callbackQuery) {
         await botAPI.sendMessageWithKeyboard(chatId, 'Выберите тип заявки:', keyboards.requestTypes());
       }
       break;
-      
     case 'type':
       const type = params[0];
       const userState2 = await db.getUserState(userId);
@@ -200,7 +192,6 @@ async function handleCallbackQuery(callbackQuery) {
         await botAPI.sendMessageWithKeyboard(chatId, 'Выберите регион:', keyboards.regions());
       }
       break;
-      
     case 'region':
       const region = params[0];
       const userState3 = await db.getUserState(userId);
@@ -210,94 +201,74 @@ async function handleCallbackQuery(callbackQuery) {
         await botAPI.sendMessage(chatId, 'Опишите подробно, какая помощь требуется:');
       }
       break;
-      
     default:
       console.log('Неизвестный callback:', data);
   }
 }
 
-/**
- * Обработка команды /start
- */
 async function handleStart(chatId, user) {
   const firstName = user?.first_name || user?.firstName || 'друг';
   const userId = user?.id || user?.user_id;
   const welcomeText = messages.welcome(firstName);
   const keyboard = keyboards.mainMenu();
-  
+
   await botAPI.sendMessageWithReplyKeyboard(chatId, welcomeText, keyboard);
-  
-  // Сбрасываем состояние пользователя
+
   if (userId) {
     await db.clearUserState(userId);
   }
 }
 
-/**
- * Обработка команды /catalog
- */
 async function handleCatalog(chatId, page = 1) {
   const requests = await db.getRequests({ limit: 5, offset: (page - 1) * 5 });
-  
+
   if (requests.length === 0) {
     await botAPI.sendMessage(chatId, messages.noRequests());
     return;
   }
-  
-  // Отправляем список заявок
+
   for (const request of requests) {
     const text = messages.requestCard(request);
     const keyboard = keyboards.requestActions(request.id);
     await botAPI.sendMessageWithKeyboard(chatId, text, keyboard);
   }
-  
-  // Кнопки навигации
+
   const totalPages = Math.ceil(await db.getRequestsCount() / 5);
   if (totalPages > 1) {
     const navKeyboard = keyboards.catalogNavigation(page, totalPages);
     await botAPI.sendMessageWithKeyboard(chatId, `Страница ${page} из ${totalPages}`, navKeyboard);
   }
-  
-  // Кнопки фильтров
+
   const filterKeyboard = keyboards.filters();
   await botAPI.sendMessageWithKeyboard(chatId, 'Фильтры:', filterKeyboard);
 }
 
-/**
- * Обработка команды /create
- */
 async function handleCreateRequest(chatId, userId) {
   await db.setUserState(userId, {
     action: 'creating_request',
     step: 'title',
     data: {}
   });
-  
+
   const text = messages.createRequestStart();
   await botAPI.sendMessage(chatId, text);
 }
 
-/**
- * Обработка шагов создания заявки
- */
 async function handleRequestCreationStep(chatId, userId, text, state) {
   const step = state.step;
   const data = state.data || {};
-  
+
   switch (step) {
     case 'title':
       data.title = text;
       await db.setUserState(userId, { ...state, step: 'category', data });
       await botAPI.sendMessageWithKeyboard(chatId, 'Выберите категорию:', keyboards.categories());
       break;
-      
-      
     case 'description':
       data.description = text;
       await db.setUserState(userId, { ...state, step: 'date', data });
       await botAPI.sendMessage(chatId, 'Укажите дату (формат: ДД.ММ.ГГГГ):');
       break;
-      
     case 'date':
       data.date = text;
       await db.setUserState(userId, { ...state, step: 'confirm', data });
@@ -305,97 +276,67 @@ async function handleRequestCreationStep(chatId, userId, text, state) {
       const confirmKeyboard = keyboards.confirmRequest();
       await botAPI.sendMessageWithKeyboard(chatId, confirmText, confirmKeyboard);
       break;
-      
-    case 'confirm':
-      // Этот шаг обрабатывается через callback query
-      break;
   }
 }
 
-/**
- * Просмотр деталей заявки
- */
 async function handleViewRequest(chatId, requestId) {
   const request = await db.getRequest(requestId);
-  
+
   if (!request) {
     await botAPI.sendMessage(chatId, 'Заявка не найдена.');
     return;
   }
-  
+
   const text = messages.requestDetails(request);
   const keyboard = keyboards.requestDetails(requestId);
   await botAPI.sendMessageWithKeyboard(chatId, text, keyboard);
 }
 
-/**
- * Отклик на заявку
- */
 async function handleRespondToRequest(chatId, userId, requestId) {
   const request = await db.getRequest(requestId);
-  
+
   if (!request) {
     await botAPI.sendMessage(chatId, 'Заявка не найдена.');
     return;
   }
-  
-  // Создаем отклик
+
   await db.createResponse({
     requestId: requestId,
     userId: userId,
     createdAt: new Date().toISOString()
   });
-  
+
   await botAPI.sendMessage(chatId, messages.responseCreated(request));
 }
 
-/**
- * Обработка команды /profile
- */
 async function handleProfile(chatId, userId) {
   const userRequests = await db.getUserRequests(userId);
   const userResponses = await db.getUserResponses(userId);
-  
+
   const text = messages.profile(userRequests, userResponses);
   await botAPI.sendMessage(chatId, text);
 }
 
-/**
- * Обработка команды /help
- */
 async function handleHelp(chatId) {
   const text = messages.help();
   await botAPI.sendMessage(chatId, text);
 }
 
-/**
- * Обработка неизвестной команды
- */
 async function handleUnknownCommand(chatId) {
   await botAPI.sendMessage(chatId, messages.unknownCommand());
   await handleStart(chatId, { first_name: 'Пользователь' });
 }
 
-/**
- * Отмена действия
- */
 async function handleCancel(chatId, userId) {
   await db.clearUserState(userId);
   await botAPI.sendMessage(chatId, 'Действие отменено.');
   await handleStart(chatId, { id: userId, first_name: 'Пользователь' });
 }
 
-/**
- * Обработка фильтров
- */
 async function handleFilter(chatId, filterType, filterValue) {
-  // Реализация фильтрации
   await botAPI.sendMessage(chatId, `Фильтр: ${filterType} = ${filterValue}`);
 }
 
-/**
- * Обработка пагинации каталога
- */
 async function handleCatalogPage(chatId, page) {
   await handleCatalog(chatId, page);
 }
@@ -405,4 +346,3 @@ module.exports = {
   handleMessage,
   handleCallbackQuery
 };
-
